@@ -1,6 +1,6 @@
 import os
 
-carpeta = r"C:\Users\sergi\Desktop\BackendTafur\li"
+carpeta = r"./li"
 archivos = sorted(os.listdir(carpeta)) 
 salida = "unificado.txt"
 
