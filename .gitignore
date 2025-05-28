@@ -1,0 +1,11 @@
+.venv
+.venv/
+*.sqlite3
+*.bin
+*.pickle
+venv
+venv/
+__pycache__
+db/chroma
+db/conocimiento
+.env
