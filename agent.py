@@ -13,36 +13,30 @@ from langchain_core.output_parsers import StrOutputParser
 from typing import List, Literal
 from typing_extensions import TypedDict
 from pprint import pprint
-from langchain.agents import tool
 from langchain_core.language_models import BaseLanguageModel
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.tools import Tool
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.prompts import PromptTemplate
-from langchain.agents import initialize_agent, AgentType
 import os
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from jose import JWTError, jwt
 import time
 import chromadb
-from chromadb.config import Settings
 import uuid
 from langgraph.graph import END, StateGraph, START
 from agents import Runner, function_tool, Agent
-from fastapi.responses import StreamingResponse
-from openai.types.responses import ResponseTextDeltaEvent, ResponseContentPartDoneEvent
-from markdown_it import MarkdownIt
 import asyncio
-
+from groq import Groq
 
 
 
 # Leyendo las credenciales
 load_dotenv()
 os.environ["GROQ_API_KEY"] = "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"
+client = Groq(api_key="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")
 os.getenv("HUGGINGFACEHUB_API_TOKEN")
 nomic_api_key = os.getenv("NOMIC_API_KEY")
 if not nomic_api_key:
@@ -780,7 +774,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
             "error": f"Entrada inválida: {str(e)}",
             "recibido": input_json
         }
-    url = "https://f5f2-34-126-71-195.ngrok-free.app/analyze"
+    url = "https://dc4b-34-124-229-142.ngrok-free.app/analyze"
     try:
         response = requests.post(url, json={"text": pregunta})
         bruto = response.json().get("result", "")
@@ -1160,6 +1154,93 @@ def get_last_answer(userid: str, chatid: str, conversationid: str, analisisEmoci
     except Exception as e:
         return {"msg": f"Error generando respuesta: {str(e)}"}
 
+from fastapi import UploadFile, File
+from fastapi import UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
+from groq import Groq
+from uuid import uuid4
+import os
+
+# Inicializa el cliente de Groq
+client = Groq(api_key="TU_API_KEY_GROQ")
+
+@app_fastapi.post("/{userid}/{chatid}/{conversationid}/getAudioAnswer")
+def get_audio_answer(
+    userid: str,
+    chatid: str,
+    conversationid: str,
+    file: UploadFile = File(...),
+    analisisEmocional: str = ""
+):
+    """
+    Recibe un audio, lo transcribe con Groq Whisper, pasa el texto al agente principal
+    y retorna la respuesta generada por el asistente.
+    """
+    print(f"[LOG] /getAudioAnswer for user={userid}, chat={chatid}, conv={conversationid}")
+
+    # Validar usuario
+    if not validate_user(userid):
+        raise HTTPException(status_code=401, detail="Usuario no válido")
+
+    # Guardar archivo de audio
+    folder_path = os.path.join("audios", userid, chatid, conversationid)
+    os.makedirs(folder_path, exist_ok=True)
+    audio_id = str(uuid4()) + ".mp3"
+    audio_path = os.path.join(folder_path, audio_id)
+    with open(audio_path, "wb") as f:
+        f.write(file.file.read())
+
+    # Transcripción con Groq Whisper
+    try:
+        with open(audio_path, "rb") as audio_file:
+            response = client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=audio_file,
+                response_format="text",
+                language="es"
+            )
+            transcribed_text = response.strip()
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Error al transcribir: {str(e)}"})
+
+    # Guardar mensaje del usuario transcrito en ChromaDB
+    collection = chroma_client.get_or_create_collection(
+        name=f"user_{userid}_chat_{chatid}"
+    )
+    user_message_id = str(uuid4())
+    collection.add(
+        documents=[transcribed_text],
+        ids=[user_message_id],
+        metadatas=[{"role": "user", "audio": audio_id, "conversationid": conversationid}],
+    )
+
+    # Enviar texto transcrito al agente
+    try:
+        respuesta_final = ejecutar_agentic_psicologico(
+            pregunta=transcribed_text,
+            userid=userid,
+            chatid=chatid,
+            conversationid=conversationid,
+            AnalisisEmocional=analisisEmocional
+        )
+
+        if not respuesta_final:
+            return {
+                "msg": "No se pudo generar una respuesta útil en este momento. Intenta reformular la pregunta."
+            }
+
+        # Guardar respuesta del agente en ChromaDB
+        assistant_message_id = str(uuid4())
+        collection.add(
+            documents=[respuesta_final],
+            ids=[assistant_message_id],
+            metadatas=[{"role": "assistant", "conversationid": conversationid}],
+        )
+
+        return {"role": "assistant", "text": respuesta_final}
+
+    except Exception as e:
+        return {"msg": f"Error generando respuesta: {str(e)}"}
 
 
 @app_fastapi.get("/{userid}")
