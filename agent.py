@@ -55,7 +55,7 @@ JWT_ALGORITHM = "HS256"
 USERS = {
     "1": {"email": "luigi@luigi.com", "password": "1234"},
 }
-
+app = FastAPI()
 
 def validate_user(userid: str) -> bool:
     return userid in USERS
