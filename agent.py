@@ -1,5 +1,6 @@
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
+from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain_nomic.embeddings import NomicEmbeddings
 from langchain_community.document_loaders import TextLoader
 from langchain.schema import Document
@@ -90,7 +91,7 @@ class Pregunta(BaseModel):
 
 # Modelo de lenguaje usado por medio de groq
 llm = ChatGroq(temperature=0, model="meta-llama/llama-4-scout-17b-16e-instruct")
-embeddings = NomicEmbeddings(model="nomic-embed-text-v1.5")
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
 # creación de documentos
 raw_documents = TextLoader(r"unificado.txt", encoding="utf-8").load()
