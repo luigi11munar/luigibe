@@ -31,11 +31,13 @@ import asyncio
 from groq import Groq
 from fastapi import UploadFile, File
 from uuid import uuid4
+from fastapi.staticfiles import StaticFiles
+import traceback
 
 # Leyendo las credenciales
 load_dotenv()
-os.environ["GROQ_API_KEY"] = "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"
-client = Groq(api_key="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")
+os.environ["GROQ_API_KEY"] = "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"
+client = Groq(api_key="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")
 os.getenv("HUGGINGFACEHUB_API_TOKEN")
 nomic_api_key = os.getenv("NOMIC_API_KEY")
 if not nomic_api_key:
@@ -510,7 +512,7 @@ def get_rate_limit_config(path: str) -> dict:
 
 
 app_fastapi = FastAPI()
-
+app_fastapi.mount("/audios", StaticFiles(directory="audios"), name="audios")
 # Add CORS middleware to allow requests from mobile devices
 app_fastapi.add_middleware(
     CORSMiddleware,
@@ -1048,22 +1050,29 @@ def get_chats_with_conversations(userid: str):
             raise HTTPException(
                 status_code=404, detail=f"Usuario {userid} no encontrado"
             )
+
+        # CORRECTED: Access the .name attribute of the collection object
+        all_collections = chroma_client.list_collections()
         user_chats = [
             col
-            for col in chroma_client.list_collections()
-            if col.startswith(f"user_{userid}_chat_")
+            for col in all_collections
+            if col.name.startswith(f"user_{userid}_chat_")
         ]
+
         path = f"./db/conversations_{userid}.json"
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         else:
             data = {}
+
         result = []
         for col in user_chats:
-            chatid = col.replace(f"user_{userid}_chat_", "")
+            # CORRECTED: Use col.name here as well
+            chatid = col.name.replace(f"user_{userid}_chat_", "")
             conversationid = data.get(chatid, None)
             result.append({"chatid": chatid, "conversationid": conversationid})
+
         return result
     except Exception as e:
         print(f"[ERROR] {e}")
@@ -1160,28 +1169,32 @@ def get_audio_answer(
     file: UploadFile = File(...),
     analisisEmocional: str = "",
 ):
-    """
-    Recibe un audio, lo transcribe con Groq Whisper, pasa el texto al agente principal
-    y retorna la respuesta generada por el asistente.
-    """
     print(
         f"[LOG] /getAudioAnswer for user={userid}, chat={chatid}, conv={conversationid}"
     )
 
-    # Validar usuario
+    # 1. Validate user
     if not validate_user(userid):
         raise HTTPException(status_code=401, detail="Usuario no válido")
 
-    # Guardar archivo de audio
+    # 2. Save the audio file
     folder_path = os.path.join("audios", userid, chatid, conversationid)
     os.makedirs(folder_path, exist_ok=True)
     audio_id = str(uuid4()) + ".mp3"
     audio_path = os.path.join(folder_path, audio_id)
-    with open(audio_path, "wb") as f:
-        f.write(file.file.read())
-
-    # Transcripción con Groq Whisper
     try:
+        with open(audio_path, "wb") as f:
+            f.write(file.file.read())
+        print("[DEBUG] Audio file saved successfully.")  # <-- ADDED
+    except IOError as e:
+        return JSONResponse(
+            status_code=500, content={"error": f"Error saving audio file: {str(e)}"}
+        )
+
+    # 3. Transcribe with Groq Whisper
+    transcribed_text = ""  # <-- ADDED
+    try:
+        print("[DEBUG] Attempting to transcribe audio with Groq...")  # <-- ADDED
         with open(audio_path, "rb") as audio_file:
             response = client.audio.transcriptions.create(
                 model="whisper-large-v3",
@@ -1190,12 +1203,16 @@ def get_audio_answer(
                 language="es",
             )
             transcribed_text = response.strip()
+        print(
+            f"[DEBUG] Transcription successful. Text: {transcribed_text}"
+        )  # <-- ADDED
     except Exception as e:
+        print(f"[ERROR] Failed during transcription: {repr(e)}")  # <-- ADDED
         return JSONResponse(
-            status_code=500, content={"error": f"Error al transcribir: {str(e)}"}
+            status_code=500, content={"error": f"Error during transcription: {str(e)}"}
         )
 
-    # Guardar mensaje del usuario transcrito en ChromaDB
+    # 4. Save user's transcribed message to ChromaDB
     collection = chroma_client.get_or_create_collection(
         name=f"user_{userid}_chat_{chatid}"
     )
@@ -1207,9 +1224,11 @@ def get_audio_answer(
             {"role": "user", "audio": audio_id, "conversationid": conversationid}
         ],
     )
+    print("[DEBUG] User message saved to ChromaDB.")  # <-- ADDED
 
-    # Enviar texto transcrito al agente
+    # 5. Get agent's response and save it
     try:
+        print("[DEBUG] Executing agent to get response...")  # <-- ADDED
         respuesta_final = ejecutar_agentic_psicologico(
             pregunta=transcribed_text,
             userid=userid,
@@ -1217,24 +1236,44 @@ def get_audio_answer(
             conversationid=conversationid,
             AnalisisEmocional=analisisEmocional,
         )
+        print("[DEBUG] Agent execution successful.")  # <-- ADDED
 
         if not respuesta_final:
-            return {
-                "msg": "No se pudo generar una respuesta útil en este momento. Intenta reformular la pregunta."
-            }
+            raise Exception(
+                "The agent could not generate a useful response at this time."
+            )
 
-        # Guardar respuesta del agente en ChromaDB
+        # Save the assistant's response to ChromaDB
         assistant_message_id = str(uuid4())
         collection.add(
             documents=[respuesta_final],
             ids=[assistant_message_id],
             metadatas=[{"role": "assistant", "conversationid": conversationid}],
         )
+        print("[DEBUG] Assistant response saved to ChromaDB.")  # <-- ADDED
 
-        return {"role": "assistant", "text": respuesta_final}
+        user_message = {
+            "role": "user",
+            "text": transcribed_text,
+            "audio": audio_id,
+        }
+        assistant_message = {"role": "assistant", "text": respuesta_final}
+
+        return {
+            "user_message": user_message,
+            "assistant_message": assistant_message,
+        }
 
     except Exception as e:
-        return {"msg": f"Error generando respuesta: {str(e)}"}
+        # This will print the full traceback to your console
+        print(
+            f"[ERROR] Exception during agent execution or final response construction: {repr(e)}"
+        )
+        traceback.print_exc()  # <-- ADDED
+
+        return JSONResponse(
+            status_code=500, content={"error": f"Error generating response: {str(e)}"}
+        )
 
 
 @app_fastapi.get("/{userid}")
@@ -1297,36 +1336,39 @@ def get_conversation_content(userid: str, chatid: str, conversationid: str):
     return content
 
 
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse
+
+# Make sure you have these imports at the top of your file
+
+
 @app_fastapi.delete("/{userid}/{chatid}")
 def delete_chat(userid: str, chatid: str):
-    # Validate user exists
+    # 1. Validate user exists
     if not validate_user(userid):
         raise HTTPException(status_code=404, detail=f"Usuario {userid} no encontrado")
-    # List all collections for this user
-    user_collections = [
-        col
-        for col in chroma_client.list_collections()
-        if col.startswith(f"user_{userid}_chat_")
-    ]
-    # Try to find the collection that matches the chatid (either as suffix or full name)
-    # Accept both: chatid is just the id, or the full collection name
-    collection_to_delete = None
-    for col in user_collections:
-        if col == chatid or col.endswith(f"_{chatid}"):
-            collection_to_delete = col
-            break
-    if not collection_to_delete:
+
+    # 2. Construct the full collection name directly
+    collection_name_to_delete = f"user_{userid}_chat_{chatid}"
+
+    try:
+        # 3. Attempt to delete the collection by its full name
+        chroma_client.delete_collection(name=collection_name_to_delete)
+        return {
+            "msg": f"Chat '{collection_name_to_delete}' eliminado para el usuario {userid}"
+        }
+
+    except Exception as e:
+        # 4. If an error occurs (e.g., collection not found), return a clear error message
+        # You can log the internal error 'e' for your own debugging purposes
+        print(f"[ERROR] Could not delete collection {collection_name_to_delete}: {e}")
+
         return JSONResponse(
             status_code=404,
             content={
-                "error": f"No se encontró el chat '{chatid}' para el usuario {userid}"
+                "error": f"No se pudo encontrar o eliminar el chat '{chatid}' para el usuario {userid}"
             },
         )
-    try:
-        chroma_client.delete_collection(name=collection_to_delete)
-        return {"msg": f"Chat '{collection_to_delete}' eliminado para user {userid}"}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 # Solo ejecuta si es directamente este script
