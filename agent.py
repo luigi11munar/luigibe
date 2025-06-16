@@ -32,8 +32,6 @@ from groq import Groq
 from fastapi import UploadFile, File
 from uuid import uuid4
 
-
-
 # Leyendo las credenciales
 load_dotenv()
 os.environ["GROQ_API_KEY"] = "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"
@@ -45,7 +43,6 @@ if not nomic_api_key:
 API_KEY = os.getenv("AGENTE_API_KEY", "R7v!9Z$kLpWq3@eF2xUt")
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-
 
 JWT_SECRET = "tu_secreto"
 JWT_ALGORITHM = "HS256"
@@ -143,7 +140,6 @@ def format_docs(docs):
 
 
 rag_chain = prompt | llm | StrOutputParser()
-
 
 
 class GradeHallucinations(BaseModel):
@@ -480,20 +476,20 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {ip} → {request.method} {path} (limit: {max_requests}/{time_window}s)"
         )
         return await call_next(request)
-    
+
 
 request_timestamps = {}
 
 RATE_LIMITS = {
-    "default": {"requests": 30, "window": 60}, 
+    "default": {"requests": 30, "window": 60},
     "/consultar": {
         "requests": 10,
         "window": 60,
-    },  
+    },
     "light": {
         "requests": 60,
         "window": 60,
-    }, 
+    },
 }
 
 LIGHT_ENDPOINTS = ["/sendMessage", "/content", "/getAnswer", "/token", "/login"]
@@ -511,8 +507,6 @@ def get_rate_limit_config(path: str) -> dict:
         return RATE_LIMITS["light"]
     else:
         return RATE_LIMITS["default"]
-
-
 
 
 app_fastapi = FastAPI()
@@ -548,7 +542,7 @@ def generar_token(x_api_key: str = Header(None)):
 chroma_client = chromadb.PersistentClient(path="./db/chroma")
 
 
-#1er agente
+# 1er agente
 @function_tool
 def responder_pregunta_en_fuentes_psicologia(input_json: str) -> str:
     """
@@ -558,6 +552,7 @@ def responder_pregunta_en_fuentes_psicologia(input_json: str) -> str:
     """
     import json
     from openai import OpenAI
+
     openai_client = OpenAI()
     try:
         data = json.loads(input_json)
@@ -568,27 +563,29 @@ def responder_pregunta_en_fuentes_psicologia(input_json: str) -> str:
     except Exception as e:
         return f"[ERROR] Entrada inválida: {str(e)}\nRecibido: {input_json}"
 
-
-
     response = openai_client.responses.create(
         model="gpt-4o",
         input=pregunta,
-        tools=[{
-            "type": "file_search",
-            "vector_store_ids": ["vs_68375d1360248191a2353723b7f5a931"]  # Cambia al ID real de tu vector store
-        }],
+        tools=[
+            {
+                "type": "file_search",
+                "vector_store_ids": [
+                    "vs_68375d1360248191a2353723b7f5a931"
+                ],  # Cambia al ID real de tu vector store
+            }
+        ],
         instructions="""
         - Analiza los pensamientos, emociones o comportamientos expresados por el usuario utilizando exclusivamente la información contenida en la base de datos, la cual es un resumen experto de los manuales DSM-5 e ICD-11 y ejemplos clínicos de ansiedad y depresión.
         - Si el usuario describe experiencias, síntomas o preocupaciones, identifica y explica los patrones clínicos relevantes basados en ese resumen, indicando su importancia o impacto según la evidencia resumida.
         - No inventes diagnósticos, síntomas ni recomendaciones que no estén explícitamente respaldados en la base de datos resumida.
-        """
+        """,
     )
     return {
         "pregunta": pregunta,
         "userid": userid,
         "chatid": chatid,
         "conversationid": conversationid,
-        "respuesta": response.output_text
+        "respuesta": response.output_text,
     }
 
 
@@ -616,27 +613,29 @@ class RAGState(TypedDict, total=False):
     respuesta: str
     useful: bool
 
+
 def vectorstore_node(state: RAGState) -> RAGState:
-    state["input_json"] = json.dumps({
-        "pregunta": state["pregunta"],
-        "userid": state.get("userid", ""),
-        "chatid": state.get("chatid", ""),
-        "conversationid": state.get("conversationid", "")
-    })
+    state["input_json"] = json.dumps(
+        {
+            "pregunta": state["pregunta"],
+            "userid": state.get("userid", ""),
+            "chatid": state.get("chatid", ""),
+            "conversationid": state.get("conversationid", ""),
+        }
+    )
     return state
+
 
 def filter_docs_node(state: RAGState) -> RAGState:
     return state
+
 
 def rag_node(state: RAGState) -> RAGState:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         result = loop.run_until_complete(
-            Runner.run(
-                psicologia_patrones_agent,
-                input=state["input_json"]
-            )
+            Runner.run(psicologia_patrones_agent, input=state["input_json"])
         )
         respuesta = result.final_output
     finally:
@@ -648,8 +647,11 @@ def rag_node(state: RAGState) -> RAGState:
         state["useful"] = False
     return state
 
+
 def fallback_node(state: RAGState) -> RAGState:
-    state["respuesta"] = "No se encontró suficiente información en las fuentes disponibles. Intenta reformular tu pregunta."
+    state["respuesta"] = (
+        "No se encontró suficiente información en las fuentes disponibles. Intenta reformular tu pregunta."
+    )
     return state
 
 
@@ -664,37 +666,42 @@ g.add_edge(START, "vectorstore")
 g.add_edge("vectorstore", "filter_docs")
 g.add_edge("filter_docs", "rag")
 g.add_conditional_edges(
-    "rag",
-    lambda state: state["useful"],  
-    {True: END, False: "fallback"}
+    "rag", lambda state: state["useful"], {True: END, False: "fallback"}
 )
 g.add_edge("fallback", END)
 
-g = g.compile()  
+g = g.compile()
+
 
 def ejecutar_agentic_rag(pregunta, userid, chatid, conversationid):
     state = {
         "pregunta": pregunta,
         "userid": userid,
         "chatid": chatid,
-        "conversationid": conversationid
+        "conversationid": conversationid,
     }
-    final_state = g.invoke(state)  
+    final_state = g.invoke(state)
     return final_state.get("respuesta")
 
 
-#2do agente
+# 2do agente
 def formatear_respuesta(texto):
-    texto = texto.replace('<|system|>', '').strip()
-    lineas = texto.split('\n')
-    partes = {'GAD-7': '', 'PHQ-9': '', 'Evaluación clínica': ''}
+    texto = texto.replace("<|system|>", "").strip()
+    lineas = texto.split("\n")
+    partes = {"GAD-7": "", "PHQ-9": "", "Evaluación clínica": ""}
     for linea in lineas:
         if "GAD-7" in linea:
-            partes['GAD-7'] = linea.replace("Ítems ", "").replace("afectados:", ":").strip()
+            partes["GAD-7"] = (
+                linea.replace("Ítems ", "").replace("afectados:", ":").strip()
+            )
         elif "PHQ-9" in linea:
-            partes['PHQ-9'] = linea.replace("Ítems ", "").replace("afectados:", ":").strip()
+            partes["PHQ-9"] = (
+                linea.replace("Ítems ", "").replace("afectados:", ":").strip()
+            )
         elif "Evaluación clínica" in linea:
-            partes['Evaluación clínica'] = linea.replace("Evaluación clínica:", "").strip()
+            partes["Evaluación clínica"] = linea.replace(
+                "Evaluación clínica:", ""
+            ).strip()
     texto_lindo = (
         "----- RESULTADO DEL ANÁLISIS -----\n"
         f"{partes['GAD-7']}\n"
@@ -703,6 +710,7 @@ def formatear_respuesta(texto):
         "----------------------------------"
     )
     return texto_lindo
+
 
 @function_tool
 def analizar_patrones_encuesta(input_json: str) -> dict:
@@ -713,6 +721,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
     """
     import json
     import requests
+
     try:
         data = json.loads(input_json)
         pregunta = data["pregunta"]
@@ -720,11 +729,8 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         chatid = data.get("chatid", "")
         conversationid = data.get("conversationid", "")
     except Exception as e:
-        return {
-            "error": f"Entrada inválida: {str(e)}",
-            "recibido": input_json
-        }
-    url = "https://f5f2-34-126-71-195.ngrok-free.app/analyze"
+        return {"error": f"Entrada inválida: {str(e)}", "recibido": input_json}
+    url = "https://0dd5-34-143-177-159.ngrok-free.app"
     try:
         response = requests.post(url, json={"text": pregunta})
         bruto = response.json().get("result", "")
@@ -736,8 +742,9 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         "userid": userid,
         "chatid": chatid,
         "conversationid": conversationid,
-        "respuesta": resultado
+        "respuesta": resultado,
     }
+
 
 psicologia_patrones_agent_encuestas = Agent(
     name="AgenteAnalisisPatronesEncuesta",
@@ -752,10 +759,11 @@ psicologia_patrones_agent_encuestas = Agent(
     ],
 )
 
-#3er agente
+# 3er agente
 
 
 llm_model: BaseLanguageModel = llm
+
 
 @function_tool
 def responder_con_contexto(input_str: str) -> str:
@@ -777,15 +785,17 @@ def responder_con_contexto(input_str: str) -> str:
     if not validate_user(userid):
         return f"[ERROR] Usuario {userid} no encontrado en el sistema."
 
-    print(f"[INFO] Tool recibida → pregunta='{pregunta}' userid={userid} chatid={chatid} conversationid={conversationid}")
-    
+    print(
+        f"[INFO] Tool recibida → pregunta='{pregunta}' userid={userid} chatid={chatid} conversationid={conversationid}"
+    )
+
     # Preparar entrada para el flujo LangGraph
     inputs = {
         "question": pregunta,
         "userid": userid,
         "chatid": chatid,
         "conversationid": conversationid,
-        "analisisEmocional": analisisEmocional
+        "analisisEmocional": analisisEmocional,
     }
 
     respuesta_final = ""
@@ -796,8 +806,14 @@ def responder_con_contexto(input_str: str) -> str:
             for key, value in output.items():
                 pprint(f"Node '{key}':")
                 if key == "grade_documents":
-                    if isinstance(value, dict) and "documents" in value and len(value["documents"]) == 0:
-                        pprint("No se encontraron documentos relevantes. Pipeline detenido.")
+                    if (
+                        isinstance(value, dict)
+                        and "documents" in value
+                        and len(value["documents"]) == 0
+                    ):
+                        pprint(
+                            "No se encontraron documentos relevantes. Pipeline detenido."
+                        )
                         stop_pipeline = True
                         break
             pprint("\n---\n")
@@ -807,7 +823,6 @@ def responder_con_contexto(input_str: str) -> str:
 
     except Exception as e:
         return f"[ERROR] Fallo en el flujo de generación: {str(e)}"
-
 
     # Intentar recuperar contexto anterior desde ChromaDB
     try:
@@ -825,7 +840,7 @@ def responder_con_contexto(input_str: str) -> str:
 
     # Adaptación clínica al contexto real
     adaptation_prompt = PromptTemplate.from_template(
-    """
+        """
     Eres un agente de apoyo emocional de la UNIVERSIDAD DE PAMPLONA, especializado en primeros auxilios psicológicos y acompañamiento empático.
 
     Acabas de recibir una respuesta basada en buenas prácticas de orientación psicológica. Tu tarea es **adaptarla para que se sienta cercana, reconfortante y viable en el entorno real del usuario**, asegurando lo siguiente:
@@ -860,21 +875,19 @@ def responder_con_contexto(input_str: str) -> str:
 
     ### Respuesta adaptada:
     """
-)
+    )
 
     prompt_text = adaptation_prompt.format(
         pregunta=pregunta,
         respuesta_original=respuesta_final,
         contexto=contexto,
-        analisisEmocional=analisisEmocional
+        analisisEmocional=analisisEmocional,
     )
 
     try:
         return llm.invoke(prompt_text)
     except Exception as e:
         return f"[ERROR] Fallo en adaptación clínica: {str(e)}"
-
-
 
 
 agent_psicologico = Agent(
@@ -887,7 +900,8 @@ agent_psicologico = Agent(
     tools=[responder_con_contexto],
 )
 
-#orquestacion
+# orquestacion
+
 
 def agente_rag_node(state):
     pregunta = state["pregunta"]
@@ -895,45 +909,57 @@ def agente_rag_node(state):
     chatid = state["chatid"]
     conversationid = state["conversationid"]
     respuesta_rag = ejecutar_agentic_rag(
-        pregunta=pregunta,
-        userid=userid,
-        chatid=chatid,
-        conversationid=conversationid
+        pregunta=pregunta, userid=userid, chatid=chatid, conversationid=conversationid
     )
-    state["historial"] = respuesta_rag["respuesta"] if isinstance(respuesta_rag, dict) else respuesta_rag
+    state["historial"] = (
+        respuesta_rag["respuesta"] if isinstance(respuesta_rag, dict) else respuesta_rag
+    )
     print("agent 1:", state)
     return state
 
-#encuestas node
+
+# encuestas node
 def agente_patrones_node(state):
-    input_json = json.dumps({
-        "pregunta": state["pregunta"],
-        "userid": state["userid"],
-        "chatid": state["chatid"],
-        "conversationid": state["conversationid"],
-    })
-    result = asyncio.run(Runner.run(psicologia_patrones_agent_encuestas, input=input_json))
-    state["historial"] = result.final_output if hasattr(result, 'final_output') else str(result)
+    input_json = json.dumps(
+        {
+            "pregunta": state["pregunta"],
+            "userid": state["userid"],
+            "chatid": state["chatid"],
+            "conversationid": state["conversationid"],
+        }
+    )
+    result = asyncio.run(
+        Runner.run(psicologia_patrones_agent_encuestas, input=input_json)
+    )
+    state["historial"] = (
+        result.final_output if hasattr(result, "final_output") else str(result)
+    )
     print("agent 2:", state)
     return state
+
 
 # Nodo Psicológico
 def agente_psicologico_node(state):
     analisisEmocional = state["historial"]
     pregunta = state["pregunta"]
 
-    input_json = json.dumps({
-        "pregunta": pregunta,
-        "userid": state["userid"],
-        "chatid": state["chatid"],
-        "conversationid": state["conversationid"],
-        "analisisEmocional": analisisEmocional,
-    })
+    input_json = json.dumps(
+        {
+            "pregunta": pregunta,
+            "userid": state["userid"],
+            "chatid": state["chatid"],
+            "conversationid": state["conversationid"],
+            "analisisEmocional": analisisEmocional,
+        }
+    )
 
     result = asyncio.run(Runner.run(agent_psicologico, input=input_json))
-    state["respuesta_final"] = result.final_output if hasattr(result, 'final_output') else str(result)
+    state["respuesta_final"] = (
+        result.final_output if hasattr(result, "final_output") else str(result)
+    )
     print("agent 3: ", state)
     return state
+
 
 # Definición del grafo
 orq = StateGraph(dict)
@@ -946,17 +972,23 @@ orq.add_edge("patrones-psicologicos", "corrective-rag")
 orq.add_edge("corrective-rag", END)
 orq = orq.compile()
 
-def ejecutar_agentic_psicologico(pregunta, AnalisisEmocional, userid="1", chatid="mi_chat", conversationid="conversacion_001"):
+
+def ejecutar_agentic_psicologico(
+    pregunta,
+    AnalisisEmocional,
+    userid="1",
+    chatid="mi_chat",
+    conversationid="conversacion_001",
+):
     state = {
         "pregunta": pregunta,
         "userid": userid,
         "chatid": chatid,
         "conversationid": conversationid,
-        "historial":  AnalisisEmocional  
+        "historial": AnalisisEmocional,
     }
     final_state = orq.invoke(state)
     return final_state.get("respuesta_final")
-
 
 
 @app_fastapi.post("/login")
@@ -1052,8 +1084,12 @@ def send_message(userid: str, chatid: str, conversationid: str, message: Message
 
 
 @app_fastapi.get("/{userid}/{chatid}/{conversationid}/getAnswer")
-def get_last_answer(userid: str, chatid: str, conversationid: str, analisisEmocional: str = ""):
-    print(f"[LOG] /getAnswer called for user={userid}, chat={chatid}, conversation={conversationid}")
+def get_last_answer(
+    userid: str, chatid: str, conversationid: str, analisisEmocional: str = ""
+):
+    print(
+        f"[LOG] /getAnswer called for user={userid}, chat={chatid}, conversation={conversationid}"
+    )
 
     # Validar usuario
     if not validate_user(userid):
@@ -1086,7 +1122,7 @@ def get_last_answer(userid: str, chatid: str, conversationid: str, analisisEmoci
             userid=userid,
             chatid=chatid,
             conversationid=conversationid,
-            AnalisisEmocional=analisisEmocional
+            AnalisisEmocional=analisisEmocional,
         )
 
         if not respuesta_final:
@@ -1108,20 +1144,21 @@ def get_last_answer(userid: str, chatid: str, conversationid: str, analisisEmoci
         return {"msg": f"Error generando respuesta: {str(e)}"}
 
 
-
 @app_fastapi.post("/{userid}/{chatid}/{conversationid}/getAudioAnswer")
 def get_audio_answer(
     userid: str,
     chatid: str,
     conversationid: str,
     file: UploadFile = File(...),
-    analisisEmocional: str = ""
+    analisisEmocional: str = "",
 ):
     """
     Recibe un audio, lo transcribe con Groq Whisper, pasa el texto al agente principal
     y retorna la respuesta generada por el asistente.
     """
-    print(f"[LOG] /getAudioAnswer for user={userid}, chat={chatid}, conv={conversationid}")
+    print(
+        f"[LOG] /getAudioAnswer for user={userid}, chat={chatid}, conv={conversationid}"
+    )
 
     # Validar usuario
     if not validate_user(userid):
@@ -1142,11 +1179,13 @@ def get_audio_answer(
                 model="whisper-large-v3",
                 file=audio_file,
                 response_format="text",
-                language="es"
+                language="es",
             )
             transcribed_text = response.strip()
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Error al transcribir: {str(e)}"})
+        return JSONResponse(
+            status_code=500, content={"error": f"Error al transcribir: {str(e)}"}
+        )
 
     # Guardar mensaje del usuario transcrito en ChromaDB
     collection = chroma_client.get_or_create_collection(
@@ -1156,7 +1195,9 @@ def get_audio_answer(
     collection.add(
         documents=[transcribed_text],
         ids=[user_message_id],
-        metadatas=[{"role": "user", "audio": audio_id, "conversationid": conversationid}],
+        metadatas=[
+            {"role": "user", "audio": audio_id, "conversationid": conversationid}
+        ],
     )
 
     # Enviar texto transcrito al agente
@@ -1166,7 +1207,7 @@ def get_audio_answer(
             userid=userid,
             chatid=chatid,
             conversationid=conversationid,
-            AnalisisEmocional=analisisEmocional
+            AnalisisEmocional=analisisEmocional,
         )
 
         if not respuesta_final:
