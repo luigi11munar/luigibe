@@ -36,8 +36,8 @@ from uuid import uuid4
 
 # Leyendo las credenciales
 load_dotenv()
-os.environ["GROQ_API_KEY"] = "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"
-client = Groq(api_key="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")
+os.environ["GROQ_API_KEY"] = "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"
+client = Groq(api_key="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")
 os.getenv("HUGGINGFACEHUB_API_TOKEN")
 nomic_api_key = os.getenv("NOMIC_API_KEY")
 if not nomic_api_key:
@@ -413,7 +413,7 @@ workflow.add_conditional_edges(
     },
 )
 
-app = workflow.compile()
+app2 = workflow.compile()
 
 
 ##FINAL CRAG###
@@ -606,35 +606,6 @@ psicologia_patrones_agent = Agent(
     ],
 )
 
-def vectorstore_node(state):
-    state["input_json"] = json.dumps({
-        "pregunta": state["pregunta"],
-        "userid": state.get("userid", ""),
-        "chatid": state.get("chatid", ""),
-        "conversationid": state.get("conversationid", "")
-    })
-    return state
-
-def filter_docs_node(state):
-    return state
-
-def rag_node(state):
-    result = asyncio.run(
-        Runner.run(
-            psicologia_patrones_agent,
-            input=state["input_json"]
-        )
-    )
-    state["respuesta"] = result.final_output
-    if not state["respuesta"] or "ERROR" in state["respuesta"]:
-        state["useful"] = False
-    else:
-        state["useful"] = True
-    return state
-
-def fallback_node(state):
-    state["respuesta"] = "No se encontró suficiente información en las fuentes disponibles. Intenta reformular tu pregunta."
-    return state
 
 class RAGState(TypedDict, total=False):
     pregunta: str
@@ -753,7 +724,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
             "error": f"Entrada inválida: {str(e)}",
             "recibido": input_json
         }
-    url = "https://f5f2-34-126-71-195.ngrok-free.app/analyze"
+    url = "https://e369-34-124-231-165.ngrok-free.app"
     try:
         response = requests.post(url, json={"text": pregunta})
         bruto = response.json().get("result", "")
@@ -821,7 +792,7 @@ def responder_con_contexto(input_str: str) -> str:
 
     try:
         stop_pipeline = False
-        for output in app.stream(inputs):
+        for output in app2.stream(inputs):
             for key, value in output.items():
                 pprint(f"Node '{key}':")
                 if key == "grade_documents":
@@ -1040,26 +1011,31 @@ def create_conversation(userid: str, chatid: str, conversationid: str):
 
 @app_fastapi.get("/{userid}/chats_with_conversations")
 def get_chats_with_conversations(userid: str):
-    # Validate user exists
-    if not validate_user(userid):
-        raise HTTPException(status_code=404, detail=f"Usuario {userid} no encontrado")
-    user_chats = [
-        col
-        for col in chroma_client.list_collections()
-        if col.startswith(f"user_{userid}_chat_")
-    ]
-    path = f"./db/conversations_{userid}.json"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    else:
-        data = {}
-    result = []
-    for col in user_chats:
-        chatid = col.replace(f"user_{userid}_chat_", "")
-        conversationid = data.get(chatid, None)
-        result.append({"chatid": chatid, "conversationid": conversationid})
-    return result
+    try:
+        if not validate_user(userid):
+            raise HTTPException(
+                status_code=404, detail=f"Usuario {userid} no encontrado"
+            )
+        user_chats = [
+            col
+            for col in chroma_client.list_collections()
+            if col.startswith(f"user_{userid}chat")
+        ]
+        path = f"./db/conversations_{userid}.json"
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = {}
+        result = []
+        for col in user_chats:
+            chatid = col.replace(f"user_{userid}chat", "")
+            conversationid = data.get(chatid, None)
+            result.append({"chatid": chatid, "conversationid": conversationid})
+        return result
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        raise HTTPException(status_code=500,detail=str(e))
 
 
 @app_fastapi.post("/{userid}/{chatid}/{conversationid}/sendMessage")
