@@ -1043,26 +1043,31 @@ def create_conversation(userid: str, chatid: str, conversationid: str):
 
 @app_fastapi.get("/{userid}/chats_with_conversations")
 def get_chats_with_conversations(userid: str):
-    # Validate user exists
-    if not validate_user(userid):
-        raise HTTPException(status_code=404, detail=f"Usuario {userid} no encontrado")
-    user_chats = [
-        col
-        for col in chroma_client.list_collections()
-        if col.startswith(f"user_{userid}_chat_")
-    ]
-    path = f"./db/conversations_{userid}.json"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    else:
-        data = {}
-    result = []
-    for col in user_chats:
-        chatid = col.replace(f"user_{userid}_chat_", "")
-        conversationid = data.get(chatid, None)
-        result.append({"chatid": chatid, "conversationid": conversationid})
-    return result
+    try:
+        if not validate_user(userid):
+            raise HTTPException(
+                status_code=404, detail=f"Usuario {userid} no encontrado"
+            )
+        user_chats = [
+            col
+            for col in chroma_client.list_collections()
+            if col.startswith(f"user_{userid}_chat_")
+        ]
+        path = f"./db/conversations_{userid}.json"
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = {}
+        result = []
+        for col in user_chats:
+            chatid = col.replace(f"user_{userid}_chat_", "")
+            conversationid = data.get(chatid, None)
+            result.append({"chatid": chatid, "conversationid": conversationid})
+        return result
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app_fastapi.post("/{userid}/{chatid}/{conversationid}/sendMessage")
@@ -1081,6 +1086,9 @@ def send_message(userid: str, chatid: str, conversationid: str, message: Message
         metadatas=[{"role": message.role, "conversationid": conversationid}],
     )
     return {"msg": "Mensaje almacenado", "id": message_id}
+
+
+from agents import RawResponsesStreamEvent, TResponseInputItem
 
 
 @app_fastapi.get("/{userid}/{chatid}/{conversationid}/getAnswer")
@@ -1300,6 +1308,8 @@ def delete_chat(userid: str, chatid: str):
         for col in chroma_client.list_collections()
         if col.startswith(f"user_{userid}_chat_")
     ]
+    # Try to find the collection that matches the chatid (either as suffix or full name)
+    # Accept both: chatid is just the id, or the full collection name
     collection_to_delete = None
     for col in user_collections:
         if col == chatid or col.endswith(f"_{chatid}"):
