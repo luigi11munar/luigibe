@@ -1249,29 +1249,29 @@ def get_audio_answer(
             language="es",
         )
         transcribed_text = response.strip()
-
+    pregunta = transcribed_text
     # 4. Save user's transcribed message to ChromaDB
     collection = chroma_client.get_or_create_collection(
         name=f"user_{userid}_chat_{chatid}"
     )
     user_message_id = str(uuid4())
     collection.add(
-        documents=[transcribed_text],
+        documents=[pregunta],
         ids=[user_message_id],
         metadatas=[
             {"role": "user", "audio": audio_id, "conversationid": conversationid}
         ],
     )
     
-    respuesta_final = ejecutar_agentic_psicologico(
-        pregunta=transcribed_text,
+    respuesta_final_audio = ejecutar_agentic_psicologico(
+        pregunta=pregunta,
         userid=userid,
         chatid=chatid,
         conversationid=conversationid,
         AnalisisEmocional=analisisEmocional,
     )
 
-    if not respuesta_final:
+    if not respuesta_final_audio:
         return {
                 "msg": "No se pudo generar una respuesta útil en este momento. Intenta reformular la pregunta."
             }
@@ -1279,12 +1279,12 @@ def get_audio_answer(
         # Guardar respuesta en la base
     message_id = str(uuid4())
     collection.add(
-        documents=[respuesta_final],
+        documents=[respuesta_final_audio],
         ids=[message_id],
         metadatas=[{"role": "assistant", "conversationid": conversationid}],
     )
 
-    return {"role": "assistant", "text": respuesta_final}
+    return {"role": "assistant", "text": respuesta_final_audio}
 
 
 
