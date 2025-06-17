@@ -753,7 +753,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         conversationid = data.get("conversationid", "")
     except Exception as e:
         return {"error": f"Entrada inválida: {str(e)}", "recibido": input_json}
-    url = "https://0dd5-34-143-177-159.ngrok-free.app"
+    url = "https://3746-34-125-132-8.ngrok-free.app/analyze"
     try:
         response = requests.post(url, json={"text": pregunta})
         bruto = response.json().get("result", "")
@@ -1001,7 +1001,7 @@ agent_psicologico = Agent(
 
         Si el usuario solo saluda, agradece, se despide o realiza comentarios sociales que no requieren apoyo emocional, responde de forma cordial y sencilla, sin activar herramientas, técnicas ni estrategias de intervención psicológica.
         Si el usuario proporciona un texto, dato o información que no tiene relación con el contexto de apoyo psicológico o emocional, responde de manera neutral y respetuosa, sin activar técnicas ni herramientas clínicas ni de acompañamiento. Tu función es únicamente intervenir cuando detectes que el usuario requiere orientación, contención emocional o psicoeducación.
-
+        Si la herramienta disponible no puede generar una respuesta útil, adecuada o relevante, responde directamente desde tu conocimiento experto en apoyo emocional, siempre siguiendo las pautas anteriores de acompañamiento, contención y orientación.
 
     """,
     tools=[responder_con_contexto],
