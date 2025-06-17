@@ -420,29 +420,6 @@ inputs = {
 
 app_crag = workflow.compile()
 
-respuesta_final = ""
-stop_pipeline = False
-for output in app_crag.stream(inputs):
-    for key, value in output.items():
-        print("entra")
-        pprint(f"Node '{key}':")
-        if key == "grade_documents":
-            if (
-                isinstance(value, dict)
-                and "documents" in value
-                and len(value["documents"]) == 0
-            ):
-                pprint(
-                    "No se encontraron documentos relevantes. Pipeline detenido."
-                )
-                stop_pipeline = True
-                break
-    pprint("\n---\n")
-    if stop_pipeline:
-        break
-pprint(value["generation"])
-respuesta_final = value["generation"]
-
 ##FINAL CRAG###
 
 
