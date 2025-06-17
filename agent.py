@@ -411,7 +411,7 @@ workflow.add_conditional_edges(
     },
 )
 
-app = workflow.compile()
+app_crag = workflow.compile()
 
 
 ##FINAL CRAG###
@@ -649,9 +649,6 @@ def vectorstore_node(state: RAGState) -> RAGState:
     return state
 
 
-def filter_docs_node(state: RAGState) -> RAGState:
-    return state
-
 
 def rag_node(state: RAGState) -> RAGState:
     loop = asyncio.new_event_loop()
@@ -677,22 +674,19 @@ def fallback_node(state: RAGState) -> RAGState:
     )
     return state
 
-
 g = StateGraph(RAGState)
-
 g.add_node("vectorstore", vectorstore_node)
-g.add_node("filter_docs", filter_docs_node)
 g.add_node("rag", rag_node)
 g.add_node("fallback", fallback_node)
-
 g.add_edge(START, "vectorstore")
-g.add_edge("vectorstore", "filter_docs")
-g.add_edge("filter_docs", "rag")
+g.add_edge("vectorstore", "rag")
+g.add_edge("rag", "fallback")
 g.add_conditional_edges(
-    "rag", lambda state: state["useful"], {True: END, False: "fallback"}
+    "rag",
+    lambda state: state["useful"],
+    {True: END, False: "fallback"}
 )
 g.add_edge("fallback", END)
-
 g = g.compile()
 
 
@@ -708,32 +702,6 @@ def ejecutar_agentic_rag(pregunta, userid, chatid, conversationid):
 
 
 # 2do agente
-def formatear_respuesta(texto):
-    texto = texto.replace("<|system|>", "").strip()
-    lineas = texto.split("\n")
-    partes = {"GAD-7": "", "PHQ-9": "", "Evaluación clínica": ""}
-    for linea in lineas:
-        if "GAD-7" in linea:
-            partes["GAD-7"] = (
-                linea.replace("Ítems ", "").replace("afectados:", ":").strip()
-            )
-        elif "PHQ-9" in linea:
-            partes["PHQ-9"] = (
-                linea.replace("Ítems ", "").replace("afectados:", ":").strip()
-            )
-        elif "Evaluación clínica" in linea:
-            partes["Evaluación clínica"] = linea.replace(
-                "Evaluación clínica:", ""
-            ).strip()
-    texto_lindo = (
-        "----- RESULTADO DEL ANÁLISIS -----\n"
-        f"{partes['GAD-7']}\n"
-        f"{partes['PHQ-9']}\n"
-        f"Evaluación clínica: {partes['Evaluación clínica']}\n"
-        "----------------------------------"
-    )
-    return texto_lindo
-
 
 @function_tool
 def analizar_patrones_encuesta(input_json: str) -> dict:
@@ -753,11 +721,10 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         conversationid = data.get("conversationid", "")
     except Exception as e:
         return {"error": f"Entrada inválida: {str(e)}", "recibido": input_json}
-    url = "https://8288-34-59-105-16.ngrok-free.app/analyze"
+    url = "https://7a02-34-121-210-42.ngrok-free.app/analyze"
     try:
         response = requests.post(url, json={"text": pregunta})
-        bruto = response.json().get("result", "")
-        resultado = formatear_respuesta(bruto)
+        resultado = response.json().get("result", "")
     except Exception as e:
         resultado = f"Error al consultar el endpoint: {str(e)}"
     return {
@@ -885,7 +852,7 @@ def responder_con_contexto(input_str: str) -> str:
 
     try:
         stop_pipeline = False
-        for output in app.stream(inputs):
+        for output in app_crag.stream(inputs):
             for key, value in output.items():
                 pprint(f"Node '{key}':")
                 if key == "grade_documents":
@@ -902,7 +869,8 @@ def responder_con_contexto(input_str: str) -> str:
             pprint("\n---\n")
             if stop_pipeline:
                 break
-            respuesta_final = value["generation"]
+        pprint(value["generation"])
+        respuesta_final = value["generation"]
 
     except Exception as e:
         return f"[ERROR] Fallo en el flujo de generación: {str(e)}"
