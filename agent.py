@@ -1287,7 +1287,6 @@ def get_audio_answer(
     return {"role": "assistant", "text": respuesta_final_audio}
 
 
-
 @app_fastapi.get("/{userid}")
 def get_user(userid: str):
     # Validate user exists
