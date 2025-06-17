@@ -852,6 +852,7 @@ def responder_con_contexto(input_str: str) -> str:
     stop_pipeline = False
     for output in app_crag.stream(inputs):
         for key, value in output.items():
+            print("entra")
             pprint(f"Node '{key}':")
             if key == "grade_documents":
                 if (
