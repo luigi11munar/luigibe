@@ -826,18 +826,13 @@ def responder_con_contexto(input_str: str) -> str:
     'pregunta', 'userid', 'chatid', 'conversationid'.
     Responde empaticamente porporcionando las herramientas de autoayuda y autogestión.
     """
-    try:
-        data = json.loads(input_str)
-        pregunta = data["pregunta"]
-        userid = data["userid"]
-        chatid = data["chatid"]
-        conversationid = data["conversationid"]
-        analisisEmocional = data["analisisEmocional"]
-    except Exception as e:
-        return f"[ERROR] Entrada inválida: {str(e)}\nRecibido: {input_str}"
-
-    if not validate_user(userid):
-        return f"[ERROR] Usuario {userid} no encontrado en el sistema."
+    data = json.loads(input_str)
+    pregunta = data["pregunta"]
+    userid = data["userid"]
+    chatid = data["chatid"]
+    conversationid = data["conversationid"]
+    analisisEmocional = data["analisisEmocional"]
+    
 
     print(
         f"[INFO] Tool recibida → pregunta='{pregunta}' userid={userid} chatid={chatid} conversationid={conversationid}"
@@ -875,19 +870,16 @@ def responder_con_contexto(input_str: str) -> str:
     respuesta_final = value["generation"]
     print("Respuesta final: ", respuesta_final)
 
-    # Intentar recuperar contexto anterior desde ChromaDB
-    try:
-        collection = chroma_client.get_or_create_collection(
-            name=f"user_{userid}_chat_{chatid}"
-        )
-        results = collection.get(where={"conversationid": conversationid})
-        contexto = "\n".join(
-            f"{meta['role'].capitalize()}: {doc}"
-            for doc, meta in zip(results["documents"], results["metadatas"])
-        )
-    except Exception as e:
-        contexto = "No se encontró contexto anterior."
-        print(f"[WARN] ChromaDB fallo: {e}")
+
+    collection = chroma_client.get_or_create_collection(
+        name=f"user_{userid}_chat_{chatid}"
+    )
+    results = collection.get(where={"conversationid": conversationid})
+    contexto = "\n".join(
+        f"{meta['role'].capitalize()}: {doc}"
+        for doc, meta in zip(results["documents"], results["metadatas"])
+    )
+
 
     # Adaptación clínica al contexto real
     adaptation_prompt = PromptTemplate.from_template(
@@ -935,10 +927,7 @@ def responder_con_contexto(input_str: str) -> str:
         analisisEmocional=analisisEmocional,
     )
 
-    try:
-        return llm.invoke(prompt_text)
-    except Exception as e:
-        return f"[ERROR] Fallo en adaptación clínica: {str(e)}"
+    return llm.invoke(prompt_text)
 
 
 agent_psicologico = Agent(
