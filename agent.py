@@ -39,7 +39,7 @@ load_dotenv()
 os.environ["GROQ_API_KEY"] = "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"
 client = Groq(api_key="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")
 os.getenv("HUGGINGFACEHUB_API_TOKEN")
-nomic_api_key = os.getenv("NOMIC_API_KEY")
+nomic_api_key = "nk-i02btrTknnkqDfpU50UL-ntTy-yQ5z7DqqxgaRVVWOk"
 if not nomic_api_key:
     raise Exception("Falta la variable de entorno NOMIC_API_KEY")
 API_KEY = os.getenv("AGENTE_API_KEY", "R7v!9Z$kLpWq3@eF2xUt")
@@ -725,7 +725,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         conversationid = data.get("conversationid", "")
     except Exception as e:
         return {"error": f"Entrada inválida: {str(e)}", "recibido": input_json}
-    url = "https://6ef1-34-143-144-61.ngrok-free.app/analyze"
+    url = "https://df40-34-125-156-104.ngrok-free.app/analyze"
     try:
         response = requests.post(url, json={"text": pregunta})
         resultado = response.json().get("result", "")
