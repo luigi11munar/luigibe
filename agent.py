@@ -1249,10 +1249,6 @@ def get_audio_answer(
             language="es",
         )
         transcribed_text = response.strip()
-    print(
-        f"[DEBUG] Transcription successful. Text: {transcribed_text}"
-    )  # <-- ADDED
-
 
     # 4. Save user's transcribed message to ChromaDB
     collection = chroma_client.get_or_create_collection(
@@ -1266,11 +1262,7 @@ def get_audio_answer(
             {"role": "user", "audio": audio_id, "conversationid": conversationid}
         ],
     )
-    print("[DEBUG] User message saved to ChromaDB.")  # <-- ADDED
-
-    # 5. Get agent's response and save it
     
-    print("[DEBUG] Executing agent to get response...")  # <-- ADDED
     respuesta_final = ejecutar_agentic_psicologico(
         pregunta=transcribed_text,
         userid=userid,
@@ -1278,33 +1270,22 @@ def get_audio_answer(
         conversationid=conversationid,
         AnalisisEmocional=analisisEmocional,
     )
-    print("[DEBUG] Agent execution successful.")  # <-- ADDED
 
     if not respuesta_final:
-        raise Exception(
-            "The agent could not generate a useful response at this time."
-        )
+        return {
+                "msg": "No se pudo generar una respuesta útil en este momento. Intenta reformular la pregunta."
+            }
 
-    # Save the assistant's response to ChromaDB
-    assistant_message_id = str(uuid4())
+        # Guardar respuesta en la base
+    message_id = str(uuid4())
     collection.add(
         documents=[respuesta_final],
-        ids=[assistant_message_id],
+        ids=[message_id],
         metadatas=[{"role": "assistant", "conversationid": conversationid}],
     )
-    print("[DEBUG] Assistant response saved to ChromaDB.")  # <-- ADDED
 
-    user_message = {
-        "role": "user",
-        "text": transcribed_text,
-        "audio": audio_id,
-    }
-    assistant_message = {"role": "assistant", "text": respuesta_final}
+    return {"role": "assistant", "text": respuesta_final}
 
-    return {
-        "user_message": user_message,
-        "assistant_message": assistant_message,
-    }
 
 
 @app_fastapi.get("/{userid}")
