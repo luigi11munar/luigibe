@@ -39,7 +39,7 @@ load_dotenv()
 os.environ["GROQ_API_KEY"] = "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"
 client = Groq(api_key="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")
 os.getenv("HUGGINGFACEHUB_API_TOKEN")
-nomic_api_key = "nk-i02btrTknnkqDfpU50UL-ntTy-yQ5z7DqqxgaRVVWOk"
+nomic_api_key = os.getenv("NOMIC_API_KEY")
 if not nomic_api_key:
     raise Exception("Falta la variable de entorno NOMIC_API_KEY")
 API_KEY = os.getenv("AGENTE_API_KEY", "R7v!9Z$kLpWq3@eF2xUt")
@@ -725,7 +725,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         conversationid = data.get("conversationid", "")
     except Exception as e:
         return {"error": f"Entrada inválida: {str(e)}", "recibido": input_json}
-    url = "https://df40-34-125-156-104.ngrok-free.app/analyze"
+    url = "https://7a02-34-121-210-42.ngrok-free.app/analyze"
     try:
         response = requests.post(url, json={"text": pregunta})
         resultado = response.json().get("result", "")
@@ -935,12 +935,15 @@ agent_psicologico = Agent(
     handoff_description="Brinda apoyo emocional inmediato de forma empática y adaptada al contexto real del usuario",
     instructions="""
 
-        ¡REGLA OBLIGATORIA! SIEMPRE usa la herramienta responder_con_contexto para contestar cualquier pregunta de apoyo emocional. 
+        ¡REGLA OBLIGATORIA! SIEMPRE usa la herramienta responder_con_contexto para contestar cualquier pregunta de apoyo emocional. SOLO si la herramienta falla, puedes responder por tu cuenta.
 
-        Tu tarea es apoyar emocionalmente con lenguaje cálido, respetuoso y adaptado al contexto real del usuario. Nunca hagas diagnósticos ni uses términos clínicos. 
+        Tu tarea es apoyar emocionalmente con lenguaje cálido, respetuoso y adaptado al contexto real del usuario. Nunca hagas diagnósticos ni uses términos clínicos. Evita técnicas llamativas o incómodas. Si das ejercicios, deben ser discretos y seguros.
 
         Recuerda: responde con empatía, orientación y apoyo. Si el usuario solo saluda, agradece o no requiere apoyo, responde cordial y breve sin usar la herramienta.
 
+
+        Si el usuario solo saluda, agradece, se despide, responde de forma cordial y sencilla, sin activar herramientas, técnicas ni estrategias de intervención psicológica.
+        Si el usuario proporciona un texto, dato o información que no tiene relación con el contexto de apoyo psicológico o emocional, responde de manera neutral y respetuosa, sin activar la herramienta anterior. 
         Si la herramienta disponible no puede generar una respuesta útil, adecuada o relevante, responde directamente desde tu conocimiento experto en apoyo emocional, siempre siguiendo las pautas anteriores de acompañamiento, contención y orientación.
 
     """,
