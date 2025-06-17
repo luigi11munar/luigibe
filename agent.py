@@ -1226,48 +1226,33 @@ def get_audio_answer(
     file: UploadFile = File(...),
     analisisEmocional: str = "",
 ):
-    print(
-        f"[LOG] /getAudioAnswer for user={userid}, chat={chatid}, conv={conversationid}"
-    )
-
-    # 1. Validate user
-    if not validate_user(userid):
-        raise HTTPException(status_code=401, detail="Usuario no válido")
 
     # 2. Save the audio file
     folder_path = os.path.join("audios", userid, chatid, conversationid)
     os.makedirs(folder_path, exist_ok=True)
     audio_id = str(uuid4()) + ".mp3"
     audio_path = os.path.join(folder_path, audio_id)
-    try:
-        with open(audio_path, "wb") as f:
-            f.write(file.file.read())
-        print("[DEBUG] Audio file saved successfully.")  # <-- ADDED
-    except IOError as e:
-        return JSONResponse(
-            status_code=500, content={"error": f"Error saving audio file: {str(e)}"}
-        )
+
+    with open(audio_path, "wb") as f:
+        f.write(file.file.read())
+    print("[DEBUG] Audio file saved successfully.")  # <-- ADDED
+
 
     # 3. Transcribe with Groq Whisper
     transcribed_text = ""  # <-- ADDED
-    try:
-        print("[DEBUG] Attempting to transcribe audio with Groq...")  # <-- ADDED
-        with open(audio_path, "rb") as audio_file:
-            response = client.audio.transcriptions.create(
-                model="whisper-large-v3",
-                file=audio_file,
-                response_format="text",
-                language="es",
-            )
-            transcribed_text = response.strip()
-        print(
-            f"[DEBUG] Transcription successful. Text: {transcribed_text}"
-        )  # <-- ADDED
-    except Exception as e:
-        print(f"[ERROR] Failed during transcription: {repr(e)}")  # <-- ADDED
-        return JSONResponse(
-            status_code=500, content={"error": f"Error during transcription: {str(e)}"}
+    print("[DEBUG] Attempting to transcribe audio with Groq...")  # <-- ADDED
+    with open(audio_path, "rb") as audio_file:
+        response = client.audio.transcriptions.create(
+            model="whisper-large-v3",
+            file=audio_file,
+            response_format="text",
+            language="es",
         )
+        transcribed_text = response.strip()
+    print(
+        f"[DEBUG] Transcription successful. Text: {transcribed_text}"
+    )  # <-- ADDED
+
 
     # 4. Save user's transcribed message to ChromaDB
     collection = chroma_client.get_or_create_collection(
@@ -1284,53 +1269,42 @@ def get_audio_answer(
     print("[DEBUG] User message saved to ChromaDB.")  # <-- ADDED
 
     # 5. Get agent's response and save it
-    try:
-        print("[DEBUG] Executing agent to get response...")  # <-- ADDED
-        respuesta_final = ejecutar_agentic_psicologico(
-            pregunta=transcribed_text,
-            userid=userid,
-            chatid=chatid,
-            conversationid=conversationid,
-            AnalisisEmocional=analisisEmocional,
+    
+    print("[DEBUG] Executing agent to get response...")  # <-- ADDED
+    respuesta_final = ejecutar_agentic_psicologico(
+        pregunta=transcribed_text,
+        userid=userid,
+        chatid=chatid,
+        conversationid=conversationid,
+        AnalisisEmocional=analisisEmocional,
+    )
+    print("[DEBUG] Agent execution successful.")  # <-- ADDED
+
+    if not respuesta_final:
+        raise Exception(
+            "The agent could not generate a useful response at this time."
         )
-        print("[DEBUG] Agent execution successful.")  # <-- ADDED
 
-        if not respuesta_final:
-            raise Exception(
-                "The agent could not generate a useful response at this time."
-            )
+    # Save the assistant's response to ChromaDB
+    assistant_message_id = str(uuid4())
+    collection.add(
+        documents=[respuesta_final],
+        ids=[assistant_message_id],
+        metadatas=[{"role": "assistant", "conversationid": conversationid}],
+    )
+    print("[DEBUG] Assistant response saved to ChromaDB.")  # <-- ADDED
 
-        # Save the assistant's response to ChromaDB
-        assistant_message_id = str(uuid4())
-        collection.add(
-            documents=[respuesta_final],
-            ids=[assistant_message_id],
-            metadatas=[{"role": "assistant", "conversationid": conversationid}],
-        )
-        print("[DEBUG] Assistant response saved to ChromaDB.")  # <-- ADDED
+    user_message = {
+        "role": "user",
+        "text": transcribed_text,
+        "audio": audio_id,
+    }
+    assistant_message = {"role": "assistant", "text": respuesta_final}
 
-        user_message = {
-            "role": "user",
-            "text": transcribed_text,
-            "audio": audio_id,
-        }
-        assistant_message = {"role": "assistant", "text": respuesta_final}
-
-        return {
-            "user_message": user_message,
-            "assistant_message": assistant_message,
-        }
-
-    except Exception as e:
-        # This will print the full traceback to your console
-        print(
-            f"[ERROR] Exception during agent execution or final response construction: {repr(e)}"
-        )
-        traceback.print_exc()  # <-- ADDED
-
-        return JSONResponse(
-            status_code=500, content={"error": f"Error generating response: {str(e)}"}
-        )
+    return {
+        "user_message": user_message,
+        "assistant_message": assistant_message,
+    }
 
 
 @app_fastapi.get("/{userid}")
