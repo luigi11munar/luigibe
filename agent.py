@@ -849,31 +849,27 @@ def responder_con_contexto(input_str: str) -> str:
     }
 
     respuesta_final = ""
+    stop_pipeline = False
+    for output in app_crag.stream(inputs):
+        for key, value in output.items():
+            pprint(f"Node '{key}':")
+            if key == "grade_documents":
+                if (
+                    isinstance(value, dict)
+                    and "documents" in value
+                    and len(value["documents"]) == 0
+                ):
+                    pprint(
+                        "No se encontraron documentos relevantes. Pipeline detenido."
+                    )
+                    stop_pipeline = True
+                    break
+        pprint("\n---\n")
+        if stop_pipeline:
+            break
+    pprint(value["generation"])
+    respuesta_final = value["generation"]
 
-    try:
-        stop_pipeline = False
-        for output in app_crag.stream(inputs):
-            for key, value in output.items():
-                pprint(f"Node '{key}':")
-                if key == "grade_documents":
-                    if (
-                        isinstance(value, dict)
-                        and "documents" in value
-                        and len(value["documents"]) == 0
-                    ):
-                        pprint(
-                            "No se encontraron documentos relevantes. Pipeline detenido."
-                        )
-                        stop_pipeline = True
-                        break
-            pprint("\n---\n")
-            if stop_pipeline:
-                break
-        pprint(value["generation"])
-        respuesta_final = value["generation"]
-
-    except Exception as e:
-        return f"[ERROR] Fallo en el flujo de generación: {str(e)}"
 
     # Intentar recuperar contexto anterior desde ChromaDB
     try:
