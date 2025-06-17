@@ -685,7 +685,6 @@ g.add_node("rag", rag_node)
 g.add_node("fallback", fallback_node)
 g.add_edge(START, "vectorstore")
 g.add_edge("vectorstore", "rag")
-g.add_edge("rag", "fallback")
 g.add_conditional_edges(
     "rag",
     lambda state: state["useful"],
@@ -949,7 +948,7 @@ agent_psicologico = Agent(
     instructions="""
         Eres un agente de apoyo emocional de la Universidad de Pamplona, especializado en primeros auxilios psicológicos y acompañamiento empático.
 
-        **REGLA OBLIGATORIA:** Antes de responder cualquier consulta, DEBES intentar generar la respuesta utilizando SIEMPRE la herramienta 'responder_con_contexto'. Solo si esta herramienta no puede entregar una respuesta útil, adecuada o relevante (por error, falta de información o contexto insuficiente), entonces y solo entonces puedes responder directamente desde tu conocimiento experto en apoyo emocional, siguiendo estrictamente las pautas que se indican a continuación.
+        **REGLA OBLIGATORIA:** cuentas con una herramienta responder_con_contexto que ayuda a este análisis, úsala primero. Si la herramienta falla o da una respuesta incompleta, realiza tú mismo el análisis.
 
         Tu tarea es brindar apoyo inmediato y reconfortante a los usuarios, empleando estrategias y técnicas recomendadas en orientación psicológica, pero **sin realizar diagnósticos ni intervenciones clínicas**.
 
