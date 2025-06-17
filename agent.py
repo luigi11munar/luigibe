@@ -753,7 +753,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         conversationid = data.get("conversationid", "")
     except Exception as e:
         return {"error": f"Entrada inválida: {str(e)}", "recibido": input_json}
-    url = "https://3746-34-125-132-8.ngrok-free.app/analyze"
+    url = "https://8288-34-59-105-16.ngrok-free.app/analyze"
     try:
         response = requests.post(url, json={"text": pregunta})
         bruto = response.json().get("result", "")
@@ -979,6 +979,8 @@ agent_psicologico = Agent(
     instructions="""
         Eres un agente de apoyo emocional de la Universidad de Pamplona, especializado en primeros auxilios psicológicos y acompañamiento empático.
 
+        Siempre que recibas una consulta, debes **intentar primero responder utilizando la herramienta 'responder_con_contexto'** para generar tu orientación y acompañamiento. Si la herramienta no puede generar una respuesta útil, adecuada o relevante, entonces responde directamente desde tu conocimiento experto en apoyo emocional, siempre siguiendo las pautas que se indican a continuación.
+
         Tu tarea es brindar apoyo inmediato y reconfortante a los usuarios, empleando estrategias y técnicas recomendadas en orientación psicológica, pero **sin realizar diagnósticos ni intervenciones clínicas**.
 
         Guíate por las siguientes pautas:
@@ -1019,9 +1021,8 @@ def agente_rag_node(state):
     respuesta_rag = ejecutar_agentic_rag(
         pregunta=pregunta, userid=userid, chatid=chatid, conversationid=conversationid
     )
-    state["historial"] = (
-        respuesta_rag["respuesta"] if isinstance(respuesta_rag, dict) else respuesta_rag
-    )
+    resp = respuesta_rag["respuesta"] if isinstance(respuesta_rag, dict) else respuesta_rag
+    state["historial"] = [resp]  # historial[0]
     print("agent 1:", state)
     return state
 
@@ -1039,16 +1040,25 @@ def agente_patrones_node(state):
     result = asyncio.run(
         Runner.run(psicologia_patrones_agent_encuestas, input=input_json)
     )
-    state["historial"] = (
-        result.final_output if hasattr(result, "final_output") else str(result)
-    )
+    resp = result.final_output if hasattr(result, "final_output") else str(result)
+    if "historial" not in state or not isinstance(state["historial"], list):
+        state["historial"] = [None]
+    state["historial"].append(resp)  # historial[1]
     print("agent 2:", state)
     return state
 
 
 # Nodo Psicológico
 def agente_psicologico_node(state):
-    analisisEmocional = state["historial"]
+    historial_prev = state.get("historial", [])
+    if not isinstance(historial_prev, list):
+        historial_prev = [historial_prev]
+    analisisEmocional = []
+    for item in historial_prev:
+        if isinstance(item, list):
+            analisisEmocional.extend(item)
+        else:
+            analisisEmocional.append(item)
     pregunta = state["pregunta"]
 
     input_json = json.dumps(
