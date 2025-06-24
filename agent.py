@@ -605,6 +605,7 @@ def responder_pregunta_en_fuentes_psicologia(input_json: str) -> str:
     }
 
 
+
 psicologia_patrones_agent = Agent(
     name="AgentePatronesPsicologicos",
     handoff_description="Agente para responder preguntas sobre el comportamiento de la persona",
