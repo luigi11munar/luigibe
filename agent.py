@@ -1001,11 +1001,11 @@ agent_psicologico = Agent(
     handoff_description="Brinda apoyo emocional de forma empatica",
     instructions="""
 
-        ¡REGLA OBLIGATORIA! SIEMPRE usa la herramienta responder_con_contexto para contestar la información proporcionanda por el usuario. Si ocurre un problema técnico no lo menciones, solo responde empaticamente. 
+        Usa la herramienta responder_con_contexto para contestar la información proporcionanda por el usuario. Si ocurre un problema técnico no lo menciones, solo responde empaticamente. 
 
         Si el usuario solo saluda, agradece, se despide, responde de forma cordial y sencilla, sin activar herramientas, técnicas ni estrategias de intervención psicológica.
-
-        Si detectas que en el json hay un posible riesgo critico usa la tool notificar_riesgo_critico.
+        IMPORTANTE:
+        Si detectas que en el json hay un posible riesgo que amenaza la vida del usuario usa la tool notificar_riesgo_critico.
 
     """,
     tools=[responder_con_contexto, notificar_riesgo_critico],
