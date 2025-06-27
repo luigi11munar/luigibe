@@ -931,25 +931,87 @@ def responder_con_contexto(input_str: str) -> str:
     return llm.invoke(prompt_text)
 
 
+@function_tool
+def notificar_riesgo_critico(input_json: str):
+    """
+    Recibe un string JSON con los campos:
+    'userid', 'chatid', 'conversationid', 'pregunta', 'respuesta', 'correo_destino'.
+    Envía un correo notificando que el usuario en ese chat presentó un posible riesgo crítico contra su salud.
+    No retorna nada.
+    """
+    import json
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    try:
+        data = json.loads(input_json)
+        userid = data["userid"]
+        chatid = data["chatid"]
+        conversationid = data["conversationid"]
+        pregunta = data["pregunta"]
+        respuesta = data["respuesta"]
+        correo_destino = data["correo_destino"]
+    except Exception as e:
+        return  # O podrías lanzar una excepción, según el manejo de errores deseado
+
+    # Configura tus credenciales SMTP
+    SMTP_SERVER = "smtp.gmail.com"
+    SMTP_PORT = 587
+    SMTP_USER = "luigijhoan@gmail.com"
+    SMTP_PASS = "Munar.,123"
+
+    asunto = "⚠️ Alerta: Posible riesgo crítico detectado en usuario"
+    mensaje = f"""
+    Se ha detectado un posible riesgo crítico para la salud de un usuario.
+
+    Información relevante:
+    - UserID: {userid}
+    - ChatID: {chatid}
+    - ConversationID: {conversationid}
+
+    Pregunta reportada:
+    {pregunta}
+
+    Respuesta generada:
+    {respuesta}
+
+    Por favor, revisa el caso y realiza seguimiento clínico lo antes posible.
+    """
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USER
+        msg['To'] = correo_destino
+        msg['Subject'] = asunto
+        msg.attach(MIMEText(mensaje, 'plain'))
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASS)
+        server.sendmail(SMTP_USER, correo_destino, msg.as_string())
+        server.quit()
+    except Exception:
+        pass  
+
+    return  
+
+
 agent_psicologico = Agent(
     name="AsistentePsicologico",
-    handoff_description="Brinda apoyo emocional inmediato de forma empática y adaptada al contexto real del usuario",
+    handoff_description="Brinda apoyo emocional de forma empatica",
     instructions="""
 
-        ¡REGLA OBLIGATORIA! SIEMPRE usa la herramienta responder_con_contexto para contestar cualquier pregunta de apoyo emocional. SOLO si la herramienta falla, puedes responder por tu cuenta.
-
-        Tu tarea es apoyar emocionalmente con lenguaje cálido, respetuoso y adaptado al contexto real del usuario. Nunca hagas diagnósticos ni uses términos clínicos. Evita técnicas llamativas o incómodas. Si das ejercicios, deben ser discretos y seguros.
-
-        Recuerda: responde con empatía, orientación y apoyo. Si el usuario solo saluda, agradece o no requiere apoyo, responde cordial y breve sin usar la herramienta.
-
+        ¡REGLA OBLIGATORIA! SIEMPRE usa la herramienta responder_con_contexto para contestar la información proporcionanda por el usuario. Si ocurre un problema técnico no lo menciones, solo responde empaticamente. 
 
         Si el usuario solo saluda, agradece, se despide, responde de forma cordial y sencilla, sin activar herramientas, técnicas ni estrategias de intervención psicológica.
-        Si el usuario proporciona un texto, dato o información que no tiene relación con el contexto de apoyo psicológico o emocional, responde de manera neutral y respetuosa, sin activar la herramienta anterior. 
-        Si la herramienta disponible no puede generar una respuesta útil, adecuada o relevante, responde directamente desde tu conocimiento experto en apoyo emocional, siempre siguiendo las pautas anteriores de acompañamiento, contención y orientación.
+
+        Si detectas que en el json hay un posible riesgo critico usa la tool notificar_riesgo_critico.
 
     """,
-    tools=[responder_con_contexto],
+    tools=[responder_con_contexto, notificar_riesgo_critico],
 )
+
 
 
 # orquestacion
