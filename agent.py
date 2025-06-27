@@ -932,7 +932,7 @@ def responder_con_contexto(input_str: str) -> str:
 
 
 @function_tool
-def notificar_riesgo_critico(input_json: str):
+def notificar_riesgo_critico(input_str: str):
     """
     Recibe un string JSON con los campos:
     'userid', 'chatid', 'conversationid', 'pregunta', 'respuesta', 'correo_destino'.
@@ -945,13 +945,13 @@ def notificar_riesgo_critico(input_json: str):
     from email.mime.multipart import MIMEMultipart
 
     try:
-        data = json.loads(input_json)
+        data = json.loads(input_str)
+        pregunta = data["pregunta"]
         userid = data["userid"]
         chatid = data["chatid"]
         conversationid = data["conversationid"]
-        pregunta = data["pregunta"]
-        respuesta = data["respuesta"]
-        correo_destino = data["correo_destino"]
+        correo_destino = "luigijhoan@gmail.com"
+
     except Exception as e:
         return  # O podrías lanzar una excepción, según el manejo de errores deseado
 
@@ -973,9 +973,6 @@ def notificar_riesgo_critico(input_json: str):
     Pregunta reportada:
     {pregunta}
 
-    Respuesta generada:
-    {respuesta}
-
     Por favor, revisa el caso y realiza seguimiento clínico lo antes posible.
     """
 
@@ -995,6 +992,8 @@ def notificar_riesgo_critico(input_json: str):
         pass  
 
     return  
+
+
 
 
 agent_psicologico = Agent(
