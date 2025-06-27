@@ -726,7 +726,7 @@ def analizar_patrones_encuesta(input_json: str) -> dict:
         conversationid = data.get("conversationid", "")
     except Exception as e:
         return {"error": f"Entrada inválida: {str(e)}", "recibido": input_json}
-    url = "https://7a02-34-121-210-42.ngrok-free.app/analyze"
+    url = "https://f898-34-44-46-162.ngrok-free.app/analyze"
     try:
         response = requests.post(url, json={"text": pregunta})
         resultado = response.json().get("result", "")
